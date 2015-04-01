@@ -58,6 +58,7 @@ protected slots:
   void runSelectedMetrics(bool run);
   void saveCurrentSpatialObjectAsCSV(bool save);
   void smoothingMethodChanged(int index);
+  void loadColorsFromCSV();
 
 protected:
   virtual void setup();

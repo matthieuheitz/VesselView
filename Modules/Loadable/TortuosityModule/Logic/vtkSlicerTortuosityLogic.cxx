@@ -36,6 +36,7 @@ limitations under the License.
 // VTK includes
 #include "vtkObjectFactory.h"
 #include "vtkDelimitedTextWriter.h"
+#include "vtkDelimitedTextReader.h"
 #include "vtkDoubleArray.h"
 #include "vtkIntArray.h"
 #include "vtkMath.h"
@@ -399,5 +400,230 @@ bool vtkSlicerTortuosityLogic
   writer->SetInputData(table.GetPointer());
 #endif
 
+//  writer->SetWriteToOutputString(true);
+//  writer->Write();
+//  std::cout<<"Output =\n"<<writer->RegisterAndGetOutputString()<<std::endl;
+//  writer->SetWriteToOutputString(false);
+
   return writer->Write();
+}
+
+//------------------------------------------------------------------------------
+bool vtkSlicerTortuosityLogic::LoadColorsFromCSV(
+    vtkMRMLSpatialObjectsNode *node, const char* filename)
+{
+
+  if (!node || !filename)
+    {
+    return false;
+    }
+
+  typedef vtkMRMLSpatialObjectsNode::TubeNetType                    TubeNetType;
+  typedef itk::VesselTubeSpatialObject<3>                           VesselTubeType;
+
+  // Load the table from file
+  vtkNew<vtkDelimitedTextReader> reader;
+  reader->SetFileName(filename);
+  reader->SetFieldDelimiterCharacters(",");
+  reader->SetHaveHeaders(true);
+  reader->SetDetectNumericColumns(true);
+  reader->Update();
+  vtkTable* colorTable = reader->GetOutput();
+  if(!colorTable)
+    {
+      std::cerr<<"Error in reading CSV file"<<std::endl;
+    }
+
+  std::cout<<"ColorTable :"<<std::endl;
+  std::cout<<"NumberOfColumns = "<<colorTable->GetNumberOfColumns()<<std::endl;
+  std::cout<<"NumberOfElements(0) = "<<colorTable->GetNumberOfElements(0)<<std::endl;
+  std::cout<<"NumberOfElements(1) = "<<colorTable->GetNumberOfElements(1)<<std::endl;
+  std::cout<<"GetNumberOfRows = "<<colorTable->GetNumberOfRows()<<std::endl;
+  std::cout<<"GetReferenceCount = "<<colorTable->GetReferenceCount()<<std::endl;
+
+  // Check if table is valid
+  if(colorTable->GetNumberOfColumns() != 2 )
+    {
+    std::cerr<<"Expected 2 columns in CSV file."
+        <<std::endl<<"Cannot proceed."<<std::endl;
+    return false;
+    }
+
+  // Get the tube list of the spatial object
+  TubeNetType* spatialObject = node->GetSpatialObject();
+  char childName[] = "Tube";
+  TubeNetType::ChildrenListType* tubeList =
+    spatialObject->GetChildren(spatialObject->GetMaximumDepth(), childName);
+  TubeNetType::ChildrenListType::iterator tubeIter;
+
+  // Create a new data array in the node
+  double defaultValue = 0.0;
+  vtkDoubleArray* customColorScaleArray =
+      this->GetOrCreateArray<vtkDoubleArray>(node, "customColorScaleArray");
+
+  // Set the size of the array
+  vtkDoubleArray* ids = this->GetArray<vtkDoubleArray>(node, "TubeIDs");
+  assert(ids);
+
+  std::cout<<"New array size = "<<customColorScaleArray->GetSize()<<std::endl;
+  std::cout<<"ID array size = "<<ids->GetSize()<<std::endl;
+
+  if (customColorScaleArray->GetSize() != ids->GetSize());
+    {
+    customColorScaleArray->SetNumberOfValues(ids->GetSize());
+    }
+
+  std::cout<<std::endl<<"************ BEFORE *******************"<<std::endl;
+  // Verify content of the array
+  std::cout<<"New array created :"<<std::endl;
+  std::cout<<"GetNumberOfTuples() = "<<customColorScaleArray->GetNumberOfTuples()<<std::endl;
+  std::cout<<"GetMaxId() = "<<customColorScaleArray->GetMaxId()<<std::endl;
+  std::cout<<"GetNumberOfComponents() = "<<customColorScaleArray->GetNumberOfComponents()<<std::endl;
+  std::cout<<"GetName() = "<<customColorScaleArray->GetName()<<std::endl;
+  std::cout<<"Content:"<<std::endl;
+  int numOfComponents = customColorScaleArray->GetNumberOfComponents();
+  double * tuple = new double[numOfComponents];
+  for( int i = 0 ; i < customColorScaleArray->GetNumberOfTuples() ; i++ )
+    {
+      customColorScaleArray->GetTuple(i, tuple);
+      std::cout<<tuple[0]<<" ";
+      if((i+1)%10 == 0) std::cout<<std::endl;
+    }
+
+
+  // Initialize the array with the default value
+  customColorScaleArray->FillComponent(0, defaultValue);
+
+
+  //** 1st method **//
+
+//  // For each pair of value in the table
+//  size_t totalNumberOfPoints = 0;
+//  size_t tubeId;
+//  for(size_t i = 0 ; i < colorTable->GetNumberOfRows() ; i++)
+//    {
+//    // Get ID of the tube to assign color to
+//    if(colorTable->GetValue(i, 0).IsInt())
+//      {
+//      tubeId = colorTable->GetValue(i, 0).ToInt();
+//      }
+//    else
+//      {
+//      std::cerr<<"Element "<<i<<" in 1st column (tube ID) is not an integer"<<std::endl;
+//      continue;
+//      }
+
+//    // Get the corresponding tube
+//    tubeIter = tubeList->begin();
+//    for(int k = 0 ; k < tubeId ; ++k)
+////    while(tubeIter - tubeList->begin() != tubeId)
+//      {
+//      ++tubeIter;
+//      }
+//    VesselTubeType* currTube =
+//      dynamic_cast<VesselTubeType*>((*tubeIter).GetPointer());
+
+//    if (!currTube)
+//      {
+//      std::cout<<"Tube with ID="<<tubeId
+//              <<" cannot be found in the current spatial object node"
+//              <<std::endl;
+//      continue;
+//      }
+//    if(currTube->GetId() != tubeId)
+//      {
+//      std::cerr<<"Tubes aren't in order of their IDs."<<std::endl
+//                <<"Implement the search of tube by ID."<<std::endl
+//                <<"Tube index in list: "<<i<<", Tube ID: "<<tubeId
+//                <<std::endl;
+//      continue;
+//      }
+
+//    // Doesn't work, I need to put the pointer at the good offset in the array,
+//    // taking into account all the first vessels.
+//    // Fill the array of that tube
+//    size_t numberOfPoints = currTube->GetPoints().size();
+//    for(size_t j = totalNumberOfPoints ; j < totalNumberOfPoints + numberOfPoints ; j++)
+//      {
+//      customColorScaleArray->SetValue( j, colorTable->GetValue(i, 1).ToDouble() );
+//      }
+//    }
+
+
+
+
+  //** 2nd method **//
+
+  // Iterate through tubeList
+  size_t totalNumberOfPoints = 0;
+  for(TubeNetType::ChildrenListType::iterator tubeIt = tubeList->begin();
+        tubeIt != tubeList->end(); ++tubeIt)
+    {
+    VesselTubeType* currTube =
+      dynamic_cast<VesselTubeType*>((*tubeIt).GetPointer());
+    if (!currTube)
+      {
+      continue;
+      }
+    if (currTube->GetNumberOfPoints() < 2)
+      {
+      std::cerr<<"Error, vessel #"<<currTube->GetId()
+        <<" has less than 2 points !"<<std::endl
+        <<"Skipping the vessel."<<std::endl;
+      continue;
+      }
+
+    // Get the current tube ID
+    int tubeId = currTube->GetId();
+    std::cout<<"Tube ID "<<tubeId;
+
+    // Look for the ID in the table and get the corresponding value
+    double valueToAssign = 0.0; //Default value for not specified tubes
+    int tubeIndex = -1;
+    for(size_t i = 0 ; i < colorTable->GetNumberOfRows() ; i++)
+      {
+      if(colorTable->GetValue(i, 0).ToInt() == tubeId)
+        {
+        tubeIndex = i;
+        valueToAssign = colorTable->GetValue(tubeIndex, 1).ToDouble();
+        std::cout<<" found in CSV : value = "<<valueToAssign<<std::endl;
+        }
+      }
+    if(tubeIndex == -1)
+      {
+      std::cout<<" not found in the CSV file"<<std::endl;
+      totalNumberOfPoints += currTube->GetPoints().size();
+      continue;
+      }
+
+    // Fill the array of that tube
+    size_t numberOfPoints = currTube->GetPoints().size();
+//    customColorScaleArray->SetNumberOfTuples(customColorScaleArray->GetNumberOfTuples() + numberOfPoints);
+    for(size_t j = totalNumberOfPoints ; j < totalNumberOfPoints + numberOfPoints ; j++)
+      {
+      customColorScaleArray->SetValue( j, valueToAssign );
+      }
+    totalNumberOfPoints += numberOfPoints;
+    }
+
+  std::cout<<std::endl<<"************ AFTER *******************"<<std::endl;
+  // Verify content of the array
+  std::cout<<"New array created :"<<std::endl;
+  std::cout<<"GetNumberOfTuples() = "<<customColorScaleArray->GetNumberOfTuples()<<std::endl;
+  std::cout<<"GetMaxId() = "<<customColorScaleArray->GetMaxId()<<std::endl;
+  std::cout<<"GetNumberOfComponents() = "<<customColorScaleArray->GetNumberOfComponents()<<std::endl;
+  std::cout<<"GetName() = "<<customColorScaleArray->GetName()<<std::endl;
+  std::cout<<"Content:"<<std::endl;
+//  int numOfComponents = customColorScaleArray->GetNumberOfComponents();
+//  double * tuple = new double[numOfComponents];
+  for( int i = 0 ; i < customColorScaleArray->GetNumberOfTuples() ; i++ )
+    {
+      customColorScaleArray->GetTuple(i, tuple);
+      std::cout<<tuple[0]<<" ";
+      if((i+1)%10 == 0) std::cout<<std::endl;
+    }
+  std::cout<<std::endl;
+
+  return true;
+
 }
