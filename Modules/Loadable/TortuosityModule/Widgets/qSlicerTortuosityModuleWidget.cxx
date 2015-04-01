@@ -29,6 +29,9 @@ limitations under the License.
 #include <QDebug>
 #include <QFileDialog>
 
+// TubeTK includes
+#include "tubeTubeMath.h"
+
 // MRML includes
 #include "vtkMRMLSpatialObjectsNode.h"
 #include "vtkSlicerTortuosityLogic.h"
@@ -79,6 +82,19 @@ void qSlicerTortuosityModuleWidgetPrivate::init()
   QObject::connect(
     this->SaveCSVPushButton, SIGNAL(toggled(bool)),
     q, SLOT(saveCurrentSpatialObjectAsCSV(bool)));
+
+  QObject::connect(
+    this->SmoothingMethodComboBox, SIGNAL(currentIndexChanged(int)),
+    q, SLOT(smoothingMethodChanged(int)));
+
+  this->AdvancedParametersCollapsibleButton->setCollapsed(true);
+
+  QComboBox *combobox = this->SmoothingMethodComboBox;
+  combobox->addItem("Average on Index", tube::SMOOTH_TUBE_USING_INDEX_AVERAGE);
+  combobox->addItem("Gaussian on Index", tube::SMOOTH_TUBE_USING_INDEX_GAUSSIAN);
+  combobox->addItem("Gaussian on Distance", tube::SMOOTH_TUBE_USING_DISTANCE_GAUSSIAN);
+  combobox->setCurrentIndex(combobox->findData(tube::SMOOTH_TUBE_USING_INDEX_GAUSSIAN));
+
 }
 
 //-----------------------------------------------------------------------------
@@ -136,8 +152,20 @@ void qSlicerTortuosityModuleWidget
 void qSlicerTortuosityModuleWidget::runMetrics(int flag)
 {
   Q_D(qSlicerTortuosityModuleWidget);
+
+  // Smoothing Scale
+  double h = d->SmoothingScaleSliderWidget->value();
+
+  // Smoothing Method
+  tube::SmoothTubeFunctionEnum smoothMethod =
+      (tube::SmoothTubeFunctionEnum)(d->SmoothingMethodComboBox->
+      itemData(d->SmoothingMethodComboBox->currentIndex()).toInt());
+
+  //Subsampling Factor
+  int subsampling = d->SubsamplingSliderWidget->value();
+
   d->RunPushButton->setEnabled(false);
-  if (!d->logic()->RunMetrics(d->currentSpatialObject, flag))
+  if (!d->logic()->RunMetrics(d->currentSpatialObject, flag, h, smoothMethod, subsampling))
     {
     qCritical("Error while running metrics !");
     }
@@ -196,4 +224,40 @@ void qSlicerTortuosityModuleWidget::saveCurrentSpatialObjectAsCSV(bool save)
 
   d->SaveCSVPushButton->setChecked(false);
   d->SaveCSVPushButton->setEnabled(true);
+}
+
+void qSlicerTortuosityModuleWidget::smoothingMethodChanged(int index)
+{
+  Q_D(qSlicerTortuosityModuleWidget);
+
+  if(index == tube::SMOOTH_TUBE_USING_INDEX_AVERAGE)
+    {
+      d->SmoothingScaleSliderWidget->setDecimals(0);
+      d->SmoothingScaleSliderWidget->setSingleStep(1);
+      d->SmoothingScaleSliderWidget->setMinimum(0);
+      d->SmoothingScaleSliderWidget->setMaximum(100);
+      d->SmoothingScaleSliderWidget->setValue(2);
+      d->SmoothingScaleSliderWidget->setToolTip("Half the window size");
+      d->SmoothingMethodLabel->setToolTip("Half the window size");
+    }
+  if(index == tube::SMOOTH_TUBE_USING_INDEX_GAUSSIAN)
+    {
+      d->SmoothingScaleSliderWidget->setDecimals(2);
+      d->SmoothingScaleSliderWidget->setSingleStep(0.1);
+      d->SmoothingScaleSliderWidget->setMinimum(0);
+      d->SmoothingScaleSliderWidget->setMaximum(50);
+      d->SmoothingScaleSliderWidget->setValue(1.0);
+      d->SmoothingScaleSliderWidget->setToolTip("Standard deviation");
+      d->SmoothingMethodLabel->setToolTip("Standard deviation");
+    }
+  if(index == tube::SMOOTH_TUBE_USING_DISTANCE_GAUSSIAN)
+    {
+      d->SmoothingScaleSliderWidget->setDecimals(2);
+      d->SmoothingScaleSliderWidget->setSingleStep(0.01);
+      d->SmoothingScaleSliderWidget->setMinimum(0);
+      d->SmoothingScaleSliderWidget->setMaximum(50);
+      d->SmoothingScaleSliderWidget->setValue(0.1);
+      d->SmoothingScaleSliderWidget->setToolTip("Standard deviation");
+      d->SmoothingMethodLabel->setToolTip("Standard deviation");
+    }
 }

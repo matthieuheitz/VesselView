@@ -33,6 +33,9 @@ limitations under the License.
 #include <vtkSlicerModuleLogic.h>
 #include <vtkSlicerTortuosityModuleLogicExport.h>
 
+// TubeTK includes
+#include "tubeTubeMath.h"
+
 #include <map>
 #include <vector>
 
@@ -88,7 +91,9 @@ public:
   bool RunSumOfAnglesMetric(vtkMRMLSpatialObjectsNode* node);
 
   // Run the metric specified by the flag on the given spatial object node.
-  bool RunMetrics(vtkMRMLSpatialObjectsNode* node, int flag);
+  bool RunMetrics(vtkMRMLSpatialObjectsNode* node, int flag, double smoothingScale = 0,
+                  tube::SmoothTubeFunctionEnum smoothingMethod = tube::SMOOTH_TUBE_USING_INDEX_GAUSSIAN,
+                  int subsampling = 1 );
 
   // Save the given metrics to CSV. Only value will be saved per vessel.
   // The export MUST find the "NumberOfPoints" array generated during the
